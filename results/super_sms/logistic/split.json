@@ -1,0 +1,10 @@
+{
+  "dataset": "super_sms",
+  "seed": 42,
+  "test_fraction": 0.1,
+  "data_sha256": "d0f86fb00ebaa8e441bc7563c6fe30121a1f8a03ae88f3a8d8b2355d5febfca8",
+  "train_messages": 54772,
+  "test_messages": 6086,
+  "test_spam": 2455,
+  "test_ham": 3631
+}

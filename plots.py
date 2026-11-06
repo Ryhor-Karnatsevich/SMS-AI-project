@@ -27,9 +27,12 @@ def save(fig, path, note):
     print(f'Chart saved: {path}')
 
 
-def plot_accuracy(results, dataset):
+def plot_accuracy(results, dataset, classifier='mlp'):
     rows = sorted(results, key=lambda r: int(r['training_percent']))
     folder = ROOT / 'results' / dataset
+    if classifier == 'logistic':
+        folder = folder / 'logistic'
+    model_name = 'MLP' if classifier == 'mlp' else 'Логистическая регрессия'
     folder.mkdir(parents=True, exist_ok=True)
     split_path = folder / 'split.json'
     split = json.loads(split_path.read_text(encoding='utf-8')) if split_path.exists() else {}
@@ -37,7 +40,7 @@ def plot_accuracy(results, dataset):
     x = list(range(len(rows)))
     ticks = [f"{int(r['training_percent'])}%\n{int(r['training_messages']):,} SMS".replace(',', ' ') for r in rows]
     accuracy = [float(r['accuracy']) * 100 for r in rows]
-    note = (f'Общий тест внутри исследования: {test_n} SMS. Проценты по X — доля обучающей части (90% данных).\n'
+    note = (f'{model_name}. Общий тест: {test_n} SMS. Проценты по X — доля обучающей части (90% данных).\n'
             'Одна точка — один запуск; разброс результатов не оценивался.')
     # A full scale and a labelled zoom show both magnitude and small changes.
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
@@ -123,3 +126,44 @@ def plot_comparison():
     fig.suptitle('Два исследования: разный объём и разные данные', fontsize=16)
     save(fig, ROOT / 'results' / 'comparison.png',
          'Тесты и пропорции классов различаются. Разница качества не доказывает эффект только объёма данных.')
+
+
+def plot_model_comparison(dataset):
+    folder = ROOT / 'results' / dataset
+    folders = [folder, folder / 'logistic']
+    if not all((p / 'metrics.csv').exists() and (p / 'split.json').exists() for p in folders):
+        print(f'Model comparison for {dataset}: both result tables are required.')
+        return
+    splits = [json.loads((p / 'split.json').read_text(encoding='utf-8')) for p in folders]
+    keys = ['data_sha256', 'seed', 'test_fraction', 'train_messages', 'test_messages',
+            'test_spam', 'test_ham']
+    if any(k not in splits[0] or k not in splits[1] or splits[0][k] != splits[1][k] for k in keys):
+        print(f'Model comparison for {dataset}: cannot verify identical data/split. '
+              'Re-evaluate saved MLP models with --train --model mlp; compatible caches are reused.')
+        return
+    tables = []
+    for p in folders:
+        with (p / 'metrics.csv').open(encoding='utf-8-sig', newline='') as f:
+            tables.append({int(r['training_percent']): r for r in csv.DictReader(f)})
+    common = sorted(set(tables[0]) & set(tables[1]))
+    if not common:
+        return
+    if any(tables[0][p]['training_messages'] != tables[1][p]['training_messages'] for p in common):
+        raise ValueError('Training subset sizes differ between models')
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    for ax, field, title in zip(axes.flat,
+                               ['accuracy', 'spam_precision', 'spam_recall', 'spam_f1'],
+                               ['Точность всех ответов', 'Precision: доля верных тревог',
+                                'Recall: доля найденного спама', 'F1 для спама']):
+        style(ax)
+        for table, name, color in zip(tables, ['Нейросеть MLP', 'Логистическая регрессия'], COLORS):
+            ax.plot(common, [float(table[p][field]) * 100 for p in common],
+                    marker='o', label=name, color=color, linewidth=2)
+        ax.set(title=title, xlabel='Доля обучающей выборки (%)', ylabel='Метрика (%)',
+               xticks=common, ylim=(0, 105))
+        ax.yaxis.set_major_formatter(PercentFormatter(100))
+        ax.legend(loc='lower right', fontsize=9)
+    fig.suptitle(f'{NAMES[dataset]}: логистическая регрессия против нейросети', fontsize=16)
+    save(fig, folder / 'model_comparison.png',
+         f'Одинаковый тест: {splits[0]["test_messages"]} SMS. Одинаковые обучающие подвыборки и TF-IDF настройки.\n'
+         'Каждая модель обучена отдельно. Показаны только объёмы, для которых готовы обе модели.')

@@ -8,12 +8,13 @@ import hashlib
 import joblib
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.metrics import confusion_matrix
-from plots import plot_accuracy, plot_comparison
+from plots import plot_accuracy, plot_comparison, plot_model_comparison
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
 ROOT = Path(__file__).resolve().parent
@@ -27,9 +28,11 @@ def load_data(dataset):
     return [r["text"] for r in rows], [int(r["label"] == "spam") for r in rows]
 
 
-def run_experiment(dataset):
+def run_experiment(dataset, classifier='mlp'):
     texts, labels = load_data(dataset)
     output = ROOT / "results" / dataset
+    if classifier == 'logistic':
+        output = output / 'logistic'
     output.mkdir(parents=True, exist_ok=True)
     model_folder = ROOT / 'models' / dataset
     model_folder.mkdir(parents=True, exist_ok=True)
@@ -41,6 +44,9 @@ def run_experiment(dataset):
               'hidden': [32], 'max_iter': 100, 'pipeline_version': 1,
               'sklearn': sklearn.__version__, 'numpy': numpy.__version__,
               'python': platform.python_version()}
+    if classifier == 'logistic':
+        config.pop('hidden')
+        config.update(classifier='logistic', max_iter=1000, C=1.0, solver='lbfgs')
     data_bytes = (ROOT / 'data' / 'clean' / f'{dataset}.csv').read_bytes()
     signature = hashlib.sha256(data_bytes + json.dumps(config, sort_keys=True).encode()).hexdigest()
     x_train, x_test, y_train, y_test = train_test_split(
@@ -62,6 +68,7 @@ def run_experiment(dataset):
 
     with (output / "split.json").open("w", encoding="utf-8") as file:
         json.dump({"dataset": dataset, "seed": SEED, "test_fraction": 0.1,
+                   "data_sha256": hashlib.sha256(data_bytes).hexdigest(),
                    "train_messages": len(x_train), "test_messages": len(x_test),
                    "test_spam": sum(y_test), "test_ham": len(y_test) - sum(y_test)}, file, indent=2)
     results = []
@@ -74,10 +81,11 @@ def run_experiment(dataset):
             ("network", MLPClassifier(
                 hidden_layer_sizes=(32,), activation="relu", solver="adam",
                 max_iter=100, random_state=SEED,
-            )),
+            ) if classifier == 'mlp' else LogisticRegression(
+                C=1.0, solver='lbfgs', max_iter=1000, random_state=SEED)),
         ])
         print(f"\nModel {fraction:.0%}: {len(subset_x)} training messages...", flush=True)
-        model_path = model_folder / f'mlp_{percent:03d}.joblib'
+        model_path = model_folder / f'{classifier}_{percent:03d}.joblib'
         if model_path.exists():
             # Load only locally generated, trusted joblib files.
             saved = joblib.load(model_path)
@@ -100,7 +108,7 @@ def run_experiment(dataset):
         tn, fp, fn, tp = confusion_matrix(y_test, predicted, labels=[0, 1]).ravel()
         row = {
             "training_percent": percent,
-            "iterations": model.named_steps["network"].n_iter_,
+            "iterations": int(numpy.asarray(model.named_steps["network"].n_iter_).max()),
             "converged": converged,
             "training_messages": len(subset_x),
             "accuracy": accuracy_score(y_test, predicted),
@@ -124,7 +132,7 @@ def run_experiment(dataset):
         writer.writeheader()
         writer.writerows(results)
     print(f"\nResults saved to {output / 'metrics.csv'}")
-    plot_accuracy(results, dataset)
+    plot_accuracy(results, dataset, classifier)
 
 
 if __name__ == "__main__":
@@ -132,22 +140,29 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", choices=["uci", "super_sms", "both"], default="both")
     parser.add_argument("--plot-only", action="store_true")
     parser.add_argument("--train", action="store_true", help="Explicitly train missing models; reuse saved ones")
+    parser.add_argument('--model', choices=['mlp', 'logistic', 'both'], default='mlp')
     args = parser.parse_args()
     if args.train and args.plot_only:
         parser.error('Choose either --train or --plot-only')
     datasets = ["uci", "super_sms"] if args.dataset == "both" else [args.dataset]
+    classifiers = ['mlp', 'logistic'] if args.model == 'both' else [args.model]
     if args.train:
         from prepare_data import main as prepare
         prepare()
     for dataset in datasets:
-        if not args.train:
-            path = ROOT / "results" / dataset / "metrics.csv"
-            if not path.exists():
-                print(f'No saved results for {dataset}; skipped. To train explicitly: --train --dataset {dataset}')
-                continue
-            with path.open(encoding="utf-8-sig") as file:
-                plot_accuracy(list(csv.DictReader(file)), dataset)
-        else:
-            run_experiment(dataset)
+        for classifier in classifiers:
+            if not args.train:
+                folder = ROOT / 'results' / dataset
+                if classifier == 'logistic':
+                    folder = folder / 'logistic'
+                path = folder / 'metrics.csv'
+                if not path.exists():
+                    print(f'No saved results for {dataset}/{classifier}; skipped.')
+                    continue
+                with path.open(encoding='utf-8-sig') as file:
+                    plot_accuracy(list(csv.DictReader(file)), dataset, classifier)
+            else:
+                run_experiment(dataset, classifier)
+        plot_model_comparison(dataset)
     plot_comparison()
 
