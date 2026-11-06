@@ -1,0 +1,9 @@
+{
+  "dataset": "super_sms",
+  "seed": 42,
+  "test_fraction": 0.1,
+  "train_messages": 54772,
+  "test_messages": 6086,
+  "test_spam": 2455,
+  "test_ham": 3631
+}

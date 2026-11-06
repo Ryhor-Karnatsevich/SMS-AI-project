@@ -1,0 +1,9 @@
+{
+  "dataset": "uci",
+  "seed": 42,
+  "test_fraction": 0.1,
+  "train_messages": 4640,
+  "test_messages": 516,
+  "test_spam": 64,
+  "test_ham": 452
+}
