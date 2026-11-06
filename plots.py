@@ -106,28 +106,6 @@ def plot_accuracy(results, dataset, classifier='mlp'):
         save(fig, folder / 'error_types.png', note)
 
 
-def plot_comparison():
-    paths = {name: ROOT / 'results' / name / 'metrics.csv' for name in NAMES}
-    if not all(p.exists() for p in paths.values()):
-        return
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-    for (name, path), color in zip(paths.items(), COLORS):
-        with path.open(encoding='utf-8-sig', newline='') as f:
-            rows = sorted(csv.DictReader(f), key=lambda r: int(r['training_messages']))
-        for ax, field in zip(axes, ['accuracy', 'spam_f1']):
-            ax.plot([int(r['training_messages']) for r in rows],
-                    [float(r[field]) * 100 for r in rows], marker='o', color=color, label=NAMES[name])
-    for ax, title in zip(axes, ['Точность всех ответов (accuracy)', 'Качество распознавания спама (F1)']):
-        style(ax)
-        ax.set(title=title, xlabel='Фактическое количество SMS для обучения',
-               ylabel='Метрика на собственном тесте (%)', ylim=(0, 105))
-        ax.yaxis.set_major_formatter(PercentFormatter(100))
-        ax.legend()
-    fig.suptitle('Два исследования: разный объём и разные данные', fontsize=16)
-    save(fig, ROOT / 'results' / 'comparison.png',
-         'Тесты и пропорции классов различаются. Разница качества не доказывает эффект только объёма данных.')
-
-
 def plot_model_comparison(dataset):
     folder = ROOT / 'results' / dataset
     folders = [folder, folder / 'logistic']
@@ -157,22 +135,48 @@ def plot_model_comparison(dataset):
         return
     if any(tables[0][p]['training_messages'] != tables[1][p]['training_messages'] for p in common):
         raise ValueError('Training subset sizes differ between models')
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    for ax, field, title in zip(axes.flat,
-                               ['accuracy', 'spam_precision', 'spam_recall', 'spam_f1'],
-                               ['Точность всех ответов', 'Precision: доля верных тревог',
-                                'Recall: доля найденного спама', 'F1 для спама']):
+    metric_specs = [
+        ('accuracy', 'Точность всех ответов', 'Правильно распознанные SMS (%)'),
+        ('spam_f1', 'Качество распознавания спама', 'F1 для спама (%)'),
+        ('spam_recall', 'Сколько спама найдено', 'Обнаруженная доля спама (%)'),
+        ('spam_precision', 'Насколько верны тревоги', 'Верные сообщения среди отмеченных как спам (%)'),
+    ]
+    for field, title, ylabel in metric_specs:
+        fig, ax = plt.subplots(figsize=(11, 6.5))
         style(ax)
-        for table, name, color in zip(tables, ['Нейросеть MLP', 'Логистическая регрессия'], COLORS):
-            ax.plot(common, [float(table[p][field]) * 100 for p in common],
-                    marker='o', label=name, color=color, linewidth=2)
-        ax.set(title=title, xlabel='Доля обучающей выборки (%)', ylabel='Метрика (%)',
-               xticks=common, ylim=(0, 105))
-        ax.yaxis.set_major_formatter(PercentFormatter(100))
-        ax.legend(loc='lower right', fontsize=9)
-    fig.suptitle(f'{NAMES[dataset]}: логистическая регрессия против нейросети', fontsize=16)
-    save(fig, folder / 'model_comparison.png',
-         (f'Параметры разделения совпадают; тест: {splits[0]["test_messages"]} SMS. '
-          'Для старого MLP нет контрольной суммы: идентичность данных не подтверждена.\n'
-          if legacy else f'Подписи данных и параметры разделения совпадают; тест: {splits[0]["test_messages"]} SMS.\n')
-         + 'Показаны только объёмы, для которых готовы обе модели; без повторного обучения.')
+        values = []
+        for table, name, color, marker in zip(
+                tables, ['MLP — нейросеть', 'Logistic Regression'], COLORS, ['o', 's']):
+            y = [float(table[p][field]) * 100 for p in common]
+            values.extend(y)
+            ax.plot(common, y, marker=marker, markersize=7, label=name,
+                    color=color, linewidth=2.6)
+        lower = max(0, (min(values) // 5) * 5 - 5)
+        ax.set_ylim(lower, 102)
+        ax.set_xlim(min(common) - 3, max(common) + 3)
+        ax.set_xticks(common, [f'{p}%' for p in common])
+        ax.tick_params(labelsize=12)
+        ax.set_xlabel('Объём обучения внутри этого исследования (% от тренировочной части)', fontsize=13, labelpad=12)
+        ax.set_ylabel(ylabel, fontsize=12, labelpad=12)
+        ax.yaxis.set_major_formatter(PercentFormatter(100, decimals=0))
+        ax.set_title(f'{NAMES[dataset]}\n{title}', fontsize=19, loc='left', pad=22)
+        ax.legend(loc='best', fontsize=12, frameon=True, facecolor='white', framealpha=0.95)
+        fig.subplots_adjust(left=0.12, right=0.96, top=0.80, bottom=0.24)
+        fig.text(0.12, 0.08,
+                 f'Тест: {splits[0]["test_messages"]:,} SMS · Шкала Y: от {lower:.0f}% · Один запуск на точку'.replace(',', ' '),
+                 fontsize=11, color='#475569')
+        fig.text(0.12, 0.035,
+                 'Старые результаты MLP: совпадение данных не подтверждено контрольной суммой.'
+                 if legacy else 'Контрольные суммы данных и параметры разделения совпадают.',
+                 fontsize=9, color='#64748b')
+        path = folder / f'compare_{field}.png'
+        fig.savefig(path, dpi=180, facecolor='white')
+        plt.close(fig)
+        print(f'CREATED: {path.resolve()}')
+
+
+if __name__ == '__main__':
+    # Chart-only entry point: no model imports, cleaning or training.
+    for dataset in NAMES:
+        plot_model_comparison(dataset)
+

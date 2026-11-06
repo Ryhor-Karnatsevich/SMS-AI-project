@@ -8,7 +8,7 @@ import hashlib
 import joblib
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.metrics import confusion_matrix
-from plots import plot_accuracy, plot_comparison, plot_model_comparison
+from plots import plot_accuracy, plot_model_comparison
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
@@ -164,5 +164,6 @@ if __name__ == "__main__":
             else:
                 run_experiment(dataset, classifier)
         plot_model_comparison(dataset)
-    plot_comparison()
+
+
 

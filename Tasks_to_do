@@ -1,0 +1,12 @@
+##Error Analysis
+
+##Co zrobić: Zajrzyjcie do powiadomień, które modele najczęściej myliły (szczególnie te prostsze sieci na mniejszych percentylach vs. te na 100% danych).
+
+##Co to daje: Sprawdźcie, jakie słowa kluczowe lub struktury powiadomień powodowały najwięcej problemów (np. powiadomienia marketingowe udające systemowe).
+
+
+##PORÓWNANIE ML Z INNYMI MODELAMI
+##Co zrobić: Przetestujcie na tych samych 10 percentylach danych nie tylko sieci neuronowe, ale też prostsze modele bazowe (np. Naive Bayes, Logistic Regression czy Random Forest).
+##Co to daje: Pokazówka porównawcza: czy głębokie uczenie/sieci neuronowe rzeczywiście miały przewagę nad prostszymi algorytmami przy mniejszych vs. większych zbiorach danych?
+ ##(Często Naiwny Bayes radzi sobie z tekstami i spamem zaskakująco dobrze przy małych próbach).
+
