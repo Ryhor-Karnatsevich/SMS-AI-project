@@ -66,3 +66,5 @@ python main.py --model both
 
 - [UCI SMS Spam Collection](https://archive.ics.uci.edu/dataset/228/sms+spam+collection).
 - [Super SMS Dataset — dane i kod autorów](https://github.com/smspamresearch/spstudy): Salman, Ikram, Kaafar (2024), *Investigating Evasive Techniques in SMS Spam Filtering: A Comparative Analysis of Machine Learning Models*, IEEE Access.
+
+Uwaga: starsze wyniki MLP nie mają sumy kontrolnej danych. Ich porównanie jest oznaczone jako historyczne: zapisane parametry podziału są zgodne, ale identyczności danych nie można w pełni potwierdzić. Wykresy odświeżamy bez ponownego uczenia.

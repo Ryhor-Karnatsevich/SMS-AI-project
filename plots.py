@@ -135,12 +135,19 @@ def plot_model_comparison(dataset):
         print(f'Model comparison for {dataset}: both result tables are required.')
         return
     splits = [json.loads((p / 'split.json').read_text(encoding='utf-8')) for p in folders]
-    keys = ['data_sha256', 'seed', 'test_fraction', 'train_messages', 'test_messages',
+    keys = ['seed', 'test_fraction', 'train_messages', 'test_messages',
             'test_spam', 'test_ham']
     if any(k not in splits[0] or k not in splits[1] or splits[0][k] != splits[1][k] for k in keys):
         print(f'Model comparison for {dataset}: cannot verify identical data/split. '
-              'Re-evaluate saved MLP models with --train --model mlp; compatible caches are reused.')
+              'Recorded split parameters differ or are missing; comparison skipped.')
         return
+    hashes = [s.get('data_sha256') for s in splits]
+    if all(hashes) and hashes[0] != hashes[1]:
+        print(f'Model comparison for {dataset}: dataset checksums differ; skipped.')
+        return
+    legacy = not all(hashes)
+    if legacy:
+        print(f'{dataset}: legacy results; split metadata agrees, but old dataset checksum is missing.')
     tables = []
     for p in folders:
         with (p / 'metrics.csv').open(encoding='utf-8-sig', newline='') as f:
@@ -165,5 +172,7 @@ def plot_model_comparison(dataset):
         ax.legend(loc='lower right', fontsize=9)
     fig.suptitle(f'{NAMES[dataset]}: логистическая регрессия против нейросети', fontsize=16)
     save(fig, folder / 'model_comparison.png',
-         f'Одинаковый тест: {splits[0]["test_messages"]} SMS. Одинаковые обучающие подвыборки и TF-IDF настройки.\n'
-         'Каждая модель обучена отдельно. Показаны только объёмы, для которых готовы обе модели.')
+         (f'Параметры разделения совпадают; тест: {splits[0]["test_messages"]} SMS. '
+          'Для старого MLP нет контрольной суммы: идентичность данных не подтверждена.\n'
+          if legacy else f'Подписи данных и параметры разделения совпадают; тест: {splits[0]["test_messages"]} SMS.\n')
+         + 'Показаны только объёмы, для которых готовы обе модели; без повторного обучения.')
