@@ -1,0 +1,10 @@
+﻿model_a,model_b,shared_errors,union_errors,jaccard
+logistic,logistic,83,83,1.0
+logistic,naive_bayes,66,177,0.3728813559322034
+logistic,svm,61,94,0.648936170212766
+naive_bayes,logistic,66,177,0.3728813559322034
+naive_bayes,naive_bayes,160,160,1.0
+naive_bayes,svm,59,173,0.34104046242774566
+svm,logistic,61,94,0.648936170212766
+svm,naive_bayes,59,173,0.34104046242774566
+svm,svm,72,72,1.0

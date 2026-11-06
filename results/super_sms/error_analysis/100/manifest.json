@@ -1,0 +1,90 @@
+{
+  "dataset": "super_sms",
+  "training_percent": 100,
+  "test_messages": 6086,
+  "test_ham": 3631,
+  "test_spam": 2455,
+  "data_sha256": "d0f86fb00ebaa8e441bc7563c6fe30121a1f8a03ae88f3a8d8b2355d5febfca8",
+  "test_indices_sha256": "9202a12b2f3b9fc9e3bfdac6d3caa76c91a04619507e44122dc0c173f9245085",
+  "model_signatures": {
+    "logistic": "b34daa5332ac209e04242cd58557b14d986ea9e8e8d34d0f77915e4c37b6ff0f",
+    "naive_bayes": "ddf86e0e2e8a7d2966fa842881ffe143a81c74089706e1ec1dcc2d2a6424f582",
+    "svm": "f5f9a1711500956e42a88018353571ebab2a69cd239f0747a5cbece22f38250d"
+  },
+  "missing_models": [
+    "mlp"
+  ],
+  "compatibility": {
+    "logistic": {
+      "versions": {
+        "sklearn": {
+          "saved": "1.9.1",
+          "current": "1.9.1"
+        },
+        "numpy": {
+          "saved": "2.1.3",
+          "current": "2.5.4"
+        }
+      },
+      "version_mismatch": true,
+      "matching_baseline_metrics": [
+        "true_negative",
+        "false_positive",
+        "false_negative",
+        "true_positive",
+        "accuracy",
+        "spam_precision",
+        "spam_recall",
+        "spam_f1"
+      ]
+    },
+    "naive_bayes": {
+      "versions": {
+        "sklearn": {
+          "saved": "1.9.1",
+          "current": "1.9.1"
+        },
+        "numpy": {
+          "saved": "2.1.3",
+          "current": "2.5.4"
+        }
+      },
+      "version_mismatch": true,
+      "matching_baseline_metrics": [
+        "true_negative",
+        "false_positive",
+        "false_negative",
+        "true_positive",
+        "accuracy",
+        "spam_precision",
+        "spam_recall",
+        "spam_f1"
+      ]
+    },
+    "svm": {
+      "versions": {
+        "sklearn": {
+          "saved": "1.9.1",
+          "current": "1.9.1"
+        },
+        "numpy": {
+          "saved": "2.1.3",
+          "current": "2.5.4"
+        }
+      },
+      "version_mismatch": true,
+      "matching_baseline_metrics": [
+        "true_negative",
+        "false_positive",
+        "false_negative",
+        "true_positive",
+        "accuracy",
+        "spam_precision",
+        "spam_recall",
+        "spam_f1"
+      ]
+    }
+  },
+  "fit_performed": false,
+  "segments": "length <=40, 41-160, >160; URL regex https?:// or www."
+}
