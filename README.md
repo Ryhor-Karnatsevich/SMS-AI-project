@@ -73,17 +73,52 @@ Sama accuracy nie wystarcza przy nierównych proporcjach klas. Dlatego zapisujem
 
 ![Dokładność klasyfikacji na UCI](results/uci/accuracy.png)
 
+**Wykrywanie spamu — precision, recall i F1**
+
+![Jakość wykrywania spamu na UCI](results/uci/spam_quality.png)
+
+**Błędy na każde 100 wiadomości testowych — mniej oznacza lepiej**
+
+![Częstość błędów na UCI](results/uci/errors.png)
+
 [Pełna tabela wyników](results/uci/metrics.csv) · [Opis podziału danych](results/uci/split.json)
 
 ### Badanie 2 · Super SMS
 
 ![Dokładność klasyfikacji na Super SMS](results/super_sms/accuracy.png)
 
+**Wykrywanie spamu — precision, recall i F1**
+
+![Jakość wykrywania spamu na Super SMS](results/super_sms/spam_quality.png)
+
+**Błędy na każde 100 wiadomości testowych — mniej oznacza lepiej**
+
+![Częstość błędów na Super SMS](results/super_sms/errors.png)
+
 [Pełna tabela wyników](results/super_sms/metrics.csv) · [Opis podziału danych](results/super_sms/split.json)
 
 Pliki wynikowe powstają po zakończeniu danego badania. Kolumna `converged` informuje, czy uczenie zakończyło się bez ostrzeżenia o osiągnięciu limitu iteracji.
 
 ## 06 · Jak interpretować wyniki?
+
+### Dwa badania na wspólnym wykresie
+
+![Porównanie badań według liczby wiadomości treningowych](results/comparison.png)
+
+Oś pozioma przedstawia rzeczywistą liczbę SMS użytych do uczenia. Każda krzywa jest oceniana na własnym zbiorze testowym.
+
+### Dodatkowy widok: rodzaje błędów
+
+Wykresy poniżej powstają dopiero po zapisaniu liczby fałszywych alarmów i przeoczonego spamu. Starsze tabele nie zawierają tych kolumn; samo odświeżenie wykresów ich nie uzupełni.
+
+<details>
+<summary>Fałszywe alarmy i przeoczony spam — po zapisaniu nowych wyników</summary>
+
+![Rodzaje błędów na UCI](results/uci/error_types.png)
+
+![Rodzaje błędów na Super SMS](results/super_sms/error_types.png)
+
+</details>
 
 Porównujemy przede wszystkim wzrost jakości **wewnątrz każdego badania**. Dwa zbiory mają inne testy i proporcje klas — różnicy wyników między nimi nie można przypisać wyłącznie liczbie danych.
 
@@ -99,8 +134,8 @@ python main.py
 Tylko jedno badanie:
 
 ```powershell
-python main.py --dataset uci
-python main.py --dataset super_sms
+python main.py --train --dataset uci
+python main.py --train --dataset super_sms
 ```
 
 Samo czyszczenie: `python prepare_data.py`.
@@ -110,7 +145,8 @@ Wykresy z zapisanych wyników, bez uczenia: `python main.py --plot-only`.
 ## 08 · Struktura projektu
 
 ```text
-main.py                     # dwa eksperymenty i wykresy
+main.py                     # zapis modeli i obsługa eksperymentów
+plots.py                    # wykresy z zapisanych wyników
 prepare_data.py             # czyszczenie i kontrola pokrycia danych
 requirements.txt            # biblioteki
 SMSSpamCollection           # oryginalne UCI
@@ -131,3 +167,30 @@ Starsze pliki bezpośrednio w `results/` pochodzą z poprzednich wersji eksperym
 - Salman, Ikram, Kaafar (2024), *Investigating Evasive Techniques in SMS Spam Filtering: A Comparative Analysis of Machine Learning Models*, IEEE Access.
 
 Przy korzystaniu z danych należy uwzględnić warunki źródeł i cytować autorów. Mapowanie Super SMS: `0 = ham`, `1 = spam`; zgodność sprawdzono na pokrywających się wiadomościach UCI, wykrywając również jedną rozbieżną etykietę (wiadomość wykluczona z nowego badania).
+
+## 09 · Bez ponownego uczenia
+
+**Zwykłe uruchomienie `python main.py` tylko tworzy wykresy z zapisanych tabel.** Nie uruchamia czyszczenia ani uczenia. `--plot-only` działa tak samo. Jeśli wyników któregoś badania jeszcze nie ma, program je pomija.
+
+Uczenie wymaga jawnej komendy:
+
+```powershell
+python main.py --train
+```
+
+Każdy model wraz z dopasowanym TF-IDF jest zapisywany w `models/uci/` lub `models/super_sms/`. Kolejne wywołanie `--train` ładuje istniejące modele i uczy tylko brakujące. Sprawdzany jest podpis danych, konfiguracji i wersji bibliotek; niezgodność zatrzymuje program, zamiast nadpisywać model. Ładuj wyłącznie własne, zaufane pliki joblib.
+
+Wcześniejsze wersje zapisywały tylko metryki. Nie da się odtworzyć wag sieci z tabeli wyników — do pierwszego zapisania takich modeli potrzebne będzie jawne uczenie. Same wykresy można zmienić bez tego. Wyniki częściowo zakończonego nowego badania sprzed dodania zapisu modeli nie zostały zachowane.
+
+### Różne sposoby prezentacji
+
+| Plik w folderze badania | Co przedstawia? |
+|---|---|
+| `accuracy.png` | Dwa panele: pełna skala 0–100% i wyraźnie opisane powiększenie; oś X pokazuje procent i liczbę SMS |
+| `spam_quality.png` | Precision, recall i F1 dla spamu, z opisem znaczenia każdej krzywej |
+| `errors.png` | Liczba błędów na każde 100 wiadomości testowych; mniej oznacza lepszy wynik |
+| `error_types.png` | Liczby fałszywych alarmów i przeoczonego spamu; wymaga nowych kolumn macierzy pomyłek |
+
+`results/comparison.png` zestawia oba badania względem rzeczywistej liczby wiadomości treningowych, jeśli dostępne są obie tabele. Różne zbiory testowe uniemożliwiają przypisanie całej różnicy samemu rozmiarowi danych. Podpisy wykresów są po rosyjsku; opis projektu w README jest po polsku.
+
+Na starych tabelach powstają trzy pierwsze wykresy; typów błędów nie da się wiarygodnie odtworzyć z zaokrąglonych metryk. Nie uruchamiamy uczenia tylko po to, aby odświeżyć wygląd wykresów.
