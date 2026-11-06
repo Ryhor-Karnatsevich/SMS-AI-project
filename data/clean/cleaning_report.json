@@ -1,0 +1,37 @@
+{
+  "source": "https://github.com/smspamresearch/spstudy",
+  "encoding": "latin-1, following author notebook; no automatic language detection",
+  "label_mapping": {
+    "0": "ham",
+    "1": "spam"
+  },
+  "policy": "Super: NFKC, invisible-character removal, invalid/empty/damaged filtering; remove UCI exact/template overlaps; deduplicate URL/email/number/punctuation templates; drop all members of conflicting-label groups. Keep original text features.",
+  "uci": {
+    "input_rows": 5574,
+    "empty_or_no_latin_letters": 3,
+    "duplicate_text": 415,
+    "kept_rows": 5156
+  },
+  "super_sms": {
+    "input_rows": 67010,
+    "invalid_label": 2,
+    "damaged_or_too_short": 632,
+    "overlap_with_uci": 4434,
+    "duplicate_template": 1084,
+    "kept_rows": 60858
+  },
+  "class_counts": {
+    "uci": {
+      "ham": 4514,
+      "spam": 642
+    },
+    "super_sms": {
+      "spam": 24549,
+      "ham": 36309
+    }
+  },
+  "source_sha256": {
+    "SMSSpamCollection": "7d039a24a6083ed9ef0f806ebad56bbb976e3aeb8de05669173bfdc4996c239d",
+    "super_sms_dataset.csv": "ba825b468b59fb229cc56c15a6c2d14d593a88051d54ea2f402166bf2ab894d3"
+  }
+}
