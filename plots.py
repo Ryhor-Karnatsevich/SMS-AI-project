@@ -1,4 +1,4 @@
-"""Create presentation charts from saved metrics; never train models."""
+"""Generate Polish charts from saved results. No training or preprocessing."""
 import csv
 import json
 from pathlib import Path
@@ -9,174 +9,169 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
 
 ROOT = Path(__file__).resolve().parent
-NAMES = {'uci': 'UCI — исходный набор', 'super_sms': 'Super SMS — новый набор'}
-COLORS = ['#2563eb', '#0d9488', '#d97706']
+NAMES = {'uci': 'UCI SMS Spam Collection', 'super_sms': 'Super SMS'}
+MODEL_NAMES = {'mlp': 'MLP', 'logistic': 'Regresja logistyczna',
+               'naive_bayes': 'Multinomial Naive Bayes', 'svm': 'Linear SVM'}
+COLORS = ['#2563eb', '#0d9488', '#d97706', '#9333ea']
+MARKERS = ['o', 's', '^', 'D']
+METRICS = [
+    ('accuracy', 'Poprawne odpowiedzi', 'Accuracy (%)'),
+    ('spam_f1', 'Jakość wykrywania spamu', 'F1 dla spamu (%)'),
+    ('spam_recall', 'Ile spamu wykrywa model?', 'Recall dla spamu (%)'),
+    ('spam_precision', 'Jak często alarm jest poprawny?', 'Precision dla spamu (%)'),
+]
+
+
+def result_folder(dataset, classifier):
+    base = ROOT / 'results' / dataset
+    return base if classifier == 'mlp' else base / classifier
 
 
 def style(ax):
     ax.grid(axis='y', alpha=0.18)
     ax.set_axisbelow(True)
     ax.spines[['top', 'right']].set_visible(False)
+    ax.tick_params(labelsize=12)
 
 
-def save(fig, path, note):
-    fig.text(0.08, 0.025, note, fontsize=9, color='#475569')
-    fig.tight_layout(rect=(0, 0.10, 1, 0.98))
+def save(fig, ax, path, title, ylabel, ticks, values, note, zoom=True):
+    lower = max(0, min(values) // 5 * 5 - 5) if zoom else 0
+    ax.set_ylim(lower, 102)
+    ax.set_xlim(min(ticks) - 3, max(ticks) + 3)
+    ax.set_xticks(ticks, [f'{p}%' for p in ticks])
+    ax.set_xlabel('Wykorzystana część puli treningowej (%)', fontsize=13, labelpad=12)
+    ax.set_ylabel(ylabel, fontsize=13, labelpad=12)
+    ax.yaxis.set_major_formatter(PercentFormatter(100, decimals=0))
+    ax.set_title(title, fontsize=19, loc='left', pad=22)
+    ax.legend(loc='best', fontsize=11, frameon=True, facecolor='white', framealpha=0.95)
+    fig.subplots_adjust(left=0.12, right=0.96, top=0.80, bottom=0.25)
+    fig.text(0.12, 0.12, f'Oś Y od {lower:.0f}%. Jeden trening na punkt; brak oceny zmienności.',
+             fontsize=10, color='#475569')
+    fig.text(0.12, 0.04, note, fontsize=9, color='#64748b')
     fig.savefig(path, dpi=180, facecolor='white')
     plt.close(fig)
-    print(f'Chart saved: {path}')
+    print(f'CREATED: {path.resolve()}')
 
 
 def plot_accuracy(results, dataset, classifier='mlp'):
+    """Keep the existing per-model chart filenames."""
     rows = sorted(results, key=lambda r: int(r['training_percent']))
-    folder = ROOT / 'results' / dataset
-    if classifier == 'logistic':
-        folder = folder / 'logistic'
-    model_name = 'MLP' if classifier == 'mlp' else 'Логистическая регрессия'
+    if not rows:
+        return
+    folder = result_folder(dataset, classifier)
     folder.mkdir(parents=True, exist_ok=True)
-    split_path = folder / 'split.json'
-    split = json.loads(split_path.read_text(encoding='utf-8')) if split_path.exists() else {}
-    test_n = split.get('test_messages', '?')
-    x = list(range(len(rows)))
-    ticks = [f"{int(r['training_percent'])}%\n{int(r['training_messages']):,} SMS".replace(',', ' ') for r in rows]
-    accuracy = [float(r['accuracy']) * 100 for r in rows]
-    note = (f'{model_name}. Общий тест: {test_n} SMS. Проценты по X — доля обучающей части (90% данных).\n'
-            'Одна точка — один запуск; разброс результатов не оценивался.')
-    # A full scale and a labelled zoom show both magnitude and small changes.
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-    fig.suptitle(f'{NAMES[dataset]}: как объём обучения влияет на точность', fontsize=16)
-    for ax in axes:
+    x = [int(r['training_percent']) for r in rows]
+    name = MODEL_NAMES[classifier]
+    index = list(MODEL_NAMES).index(classifier)
+    color = COLORS[index]
+    for field, title, ylabel in METRICS:
+        y = [float(r[field]) * 100 for r in rows]
+        fig, ax = plt.subplots(figsize=(11, 6.5))
         style(ax)
-        ax.plot(x, accuracy, color=COLORS[0], marker='o', linewidth=2)
-        ax.set_xticks(x, ticks, fontsize=8)
-        ax.set_xlabel('Объём данных, использованных для обучения')
-        ax.set_ylabel('Правильно распознанные SMS / все тестовые SMS')
-        ax.yaxis.set_major_formatter(PercentFormatter(100))
-    axes[0].set(title='Полная шкала: доля правильных ответов', ylim=(0, 100))
-    low = max(0, min(accuracy) - 1.5)
-    axes[1].set(title='Увеличенный участок: небольшие изменения', ylim=(low, 100.5))
-    for i, value in enumerate(accuracy):
-        axes[1].annotate(f'{value:.2f}%', (i, value), xytext=(0, 8),
-                         textcoords='offset points', ha='center', fontsize=8)
-    if split.get('test_messages'):
-        baseline = max(split['test_ham'], split['test_spam']) / split['test_messages'] * 100
-        axes[0].axhline(baseline, color='#64748b', linestyle='--',
-                       label=f'Всегда выбирать больший класс: {baseline:.1f}%')
-        axes[0].legend(loc='lower right', fontsize=8)
-    save(fig, folder / 'accuracy.png', note)
+        ax.plot(x, y, marker=MARKERS[index], linewidth=2.6, color=color, label=name)
+        filename = 'accuracy.png' if field == 'accuracy' else f'{field}.png'
+        save(fig, ax, folder / filename, f'{NAMES[dataset]} | {name}\n{title}', ylabel,
+             x, y, 'Procent dotyczy puli treningowej (90% danych), nie całego zbioru.')
 
-    fig, ax = plt.subplots(figsize=(13, 6))
+    fig, ax = plt.subplots(figsize=(11, 6.5))
     style(ax)
-    for field, label, color in zip(
-        ['spam_precision', 'spam_recall', 'spam_f1'],
-        ['Precision: какая доля тревог верна', 'Recall: какая доля спама найдена',
-         'F1: баланс precision и recall'], COLORS):
-        ax.plot(x, [float(r[field]) * 100 for r in rows], marker='o',
-                linewidth=2, label=label, color=color)
-    ax.set_xticks(x, ticks, fontsize=9)
-    ax.set(title=f'{NAMES[dataset]}: насколько хорошо распознаётся спам',
-           xlabel='Объём данных для обучения', ylabel='Значение метрики (%)', ylim=(0, 105))
-    ax.yaxis.set_major_formatter(PercentFormatter(100))
-    ax.legend(loc='lower right')
-    save(fig, folder / 'spam_quality.png', note)
+    values = []
+    for (field, title, _), color in zip(METRICS[1:], COLORS):
+        y = [float(r[field]) * 100 for r in rows]
+        values.extend(y)
+        ax.plot(x, y, marker='o', linewidth=2, label=field.replace('spam_', '').upper(), color=color)
+    save(fig, ax, folder / 'spam_quality.png', f'{NAMES[dataset]} | {name}\nWykrywanie spamu',
+         'Wartość miary (%)', x, values, 'F1: balans precision i recall. Test nie jest uzywany do uczenia.')
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(11, 6.5))
     style(ax)
     errors = [(1 - float(r['accuracy'])) * 100 for r in rows]
-    bars = ax.bar(x, errors, color=COLORS[2], width=0.65)
-    ax.bar_label(bars, labels=[f'{v:.2f}' for v in errors], padding=4, fontsize=9)
-    ax.set_xticks(x, ticks, fontsize=9)
-    ax.set(title=f'{NAMES[dataset]}: как часто модель ошибается',
-           xlabel='Объём данных для обучения',
-           ylabel='Ошибки на каждые 100 тестовых SMS — меньше лучше',
-           ylim=(0, max(1, max(errors) * 1.3)))
-    save(fig, folder / 'errors.png', note)
+    bars = ax.bar(x, errors, color=color, width=6)
+    ax.bar_label(bars, labels=[f'{v:.2f}' for v in errors], padding=5)
+    ax.set(xticks=x, xlabel='Wykorzystana część puli treningowej (%)',
+           ylabel='Błędy na 100 testowych SMS', ylim=(0, max(1, max(errors) * 1.3)))
+    ax.set_title(f'{NAMES[dataset]} | {name}\nCzęstość błędów — mniej znaczy lepiej', fontsize=18, loc='left')
+    fig.tight_layout()
+    fig.savefig(folder / 'errors.png', dpi=180)
+    plt.close(fig)
 
     if all('false_positive' in r and 'false_negative' in r for r in rows):
-        fig, ax = plt.subplots(figsize=(13, 6))
+        fig, ax = plt.subplots(figsize=(11, 6.5))
         style(ax)
-        ax.bar([i - 0.18 for i in x], [int(r['false_positive']) for r in rows],
-               width=0.36, color=COLORS[2], label='Обычный SMS ошибочно назван спамом')
-        ax.bar([i + 0.18 for i in x], [int(r['false_negative']) for r in rows],
-               width=0.36, color=COLORS[0], label='Спам пропущен как обычный SMS')
-        ax.set_xticks(x, ticks, fontsize=9)
-        ax.set(title=f'{NAMES[dataset]}: два типа ошибок', xlabel='Объём данных для обучения',
-               ylabel='Количество сообщений на общем тесте')
+        ax.bar([p - 1.7 for p in x], [int(r['false_positive']) for r in rows], width=3.4,
+               color=COLORS[2], label='Fałszywy alarm: ham jako spam')
+        ax.bar([p + 1.7 for p in x], [int(r['false_negative']) for r in rows], width=3.4,
+               color=COLORS[0], label='Przeoczony spam: spam jako ham')
+        ax.set(xticks=x, xlabel='Wykorzystana część puli treningowej (%)', ylabel='Liczba testowych SMS')
+        ax.set_title(f'{NAMES[dataset]} | {name}\nRodzaje błędów', fontsize=18, loc='left')
         ax.legend()
-        save(fig, folder / 'error_types.png', note)
+        fig.tight_layout()
+        fig.savefig(folder / 'error_types.png', dpi=180)
+        plt.close(fig)
 
 
 def plot_model_comparison(dataset):
-    folder = ROOT / 'results' / dataset
-    folders = [folder, folder / 'logistic']
-    if not all((p / 'metrics.csv').exists() and (p / 'split.json').exists() for p in folders):
-        print(f'Model comparison for {dataset}: both result tables are required.')
+    """Compare only compatible results within one dataset. Preserve old chart paths."""
+    available = {}
+    splits = {}
+    for classifier in MODEL_NAMES:
+        folder = result_folder(dataset, classifier)
+        if not ((folder / 'metrics.csv').exists() and (folder / 'split.json').exists()):
+            print(f'{dataset}/{classifier}: no saved results; omitted from chart.')
+            continue
+        with (folder / 'metrics.csv').open(encoding='utf-8-sig', newline='') as f:
+            table = {int(r['training_percent']): r for r in csv.DictReader(f)}
+        if table:
+            available[classifier] = table
+            splits[classifier] = json.loads((folder / 'split.json').read_text(encoding='utf-8'))
+    if not available:
+        print(f'{dataset}: no results to plot.')
         return
-    splits = [json.loads((p / 'split.json').read_text(encoding='utf-8')) for p in folders]
-    keys = ['seed', 'test_fraction', 'train_messages', 'test_messages',
-            'test_spam', 'test_ham']
-    if any(k not in splits[0] or k not in splits[1] or splits[0][k] != splits[1][k] for k in keys):
-        print(f'Model comparison for {dataset}: cannot verify identical data/split. '
-              'Recorded split parameters differ or are missing; comparison skipped.')
-        return
-    hashes = [s.get('data_sha256') for s in splits]
-    if all(hashes) and hashes[0] != hashes[1]:
-        print(f'Model comparison for {dataset}: dataset checksums differ; skipped.')
-        return
-    legacy = not all(hashes)
-    if legacy:
-        print(f'{dataset}: legacy results; split metadata agrees, but old dataset checksum is missing.')
-    tables = []
-    for p in folders:
-        with (p / 'metrics.csv').open(encoding='utf-8-sig', newline='') as f:
-            tables.append({int(r['training_percent']): r for r in csv.DictReader(f)})
-    common = sorted(set(tables[0]) & set(tables[1]))
-    if not common:
-        return
-    if any(tables[0][p]['training_messages'] != tables[1][p]['training_messages'] for p in common):
-        raise ValueError('Training subset sizes differ between models')
-    metric_specs = [
-        ('accuracy', 'Точность всех ответов', 'Правильно распознанные SMS (%)'),
-        ('spam_f1', 'Качество распознавания спама', 'F1 для спама (%)'),
-        ('spam_recall', 'Сколько спама найдено', 'Обнаруженная доля спама (%)'),
-        ('spam_precision', 'Насколько верны тревоги', 'Верные сообщения среди отмеченных как спам (%)'),
-    ]
-    for field, title, ylabel in metric_specs:
+    reference = next(iter(splits.values()))
+    keys = ['seed', 'test_fraction', 'train_messages', 'test_messages', 'test_spam', 'test_ham']
+    for classifier, split in splits.items():
+        if any(k not in reference or k not in split or reference[k] != split[k] for k in keys):
+            raise ValueError(f'{dataset}/{classifier}: incompatible split metadata')
+    hashes = {s['data_sha256'] for s in splits.values() if s.get('data_sha256')}
+    if len(hashes) > 1:
+        raise ValueError(f'{dataset}: dataset checksums differ')
+    legacy = any(not s.get('data_sha256') for s in splits.values())
+    sizes = {}
+    for classifier, table in available.items():
+        for percent, row in table.items():
+            n = int(row['training_messages'])
+            if percent in sizes and sizes[percent] != n:
+                raise ValueError(f'{dataset}: training sample sizes differ at {percent}%')
+            sizes[percent] = n
+    ticks = sorted(sizes)
+    names = ', '.join(MODEL_NAMES[c] for c in available)
+    note = f'Test: {reference["test_messages"]} SMS. Dostępne modele: {len(available)}/4.\n'
+    note += ('Starszy wynik bez sumy kontrolnej: identyczność danych nie jest w pełni potwierdzona.'
+             if legacy else 'Sumy kontrolne danych i parametry podzialu są zgodne.')
+    for field, title, ylabel in METRICS:
         fig, ax = plt.subplots(figsize=(11, 6.5))
         style(ax)
         values = []
-        for table, name, color, marker in zip(
-                tables, ['MLP — нейросеть', 'Logistic Regression'], COLORS, ['o', 's']):
-            y = [float(table[p][field]) * 100 for p in common]
+        for classifier, color, marker in zip(MODEL_NAMES, COLORS, MARKERS):
+            if classifier not in available:
+                continue
+            table = available[classifier]
+            x = sorted(table)
+            y = [float(table[p][field]) * 100 for p in x]
             values.extend(y)
-            ax.plot(common, y, marker=marker, markersize=7, label=name,
-                    color=color, linewidth=2.6)
-        lower = max(0, (min(values) // 5) * 5 - 5)
-        ax.set_ylim(lower, 102)
-        ax.set_xlim(min(common) - 3, max(common) + 3)
-        ax.set_xticks(common, [f'{p}%' for p in common])
-        ax.tick_params(labelsize=12)
-        ax.set_xlabel('Объём обучения внутри этого исследования (% от тренировочной части)', fontsize=13, labelpad=12)
-        ax.set_ylabel(ylabel, fontsize=12, labelpad=12)
-        ax.yaxis.set_major_formatter(PercentFormatter(100, decimals=0))
-        ax.set_title(f'{NAMES[dataset]}\n{title}', fontsize=19, loc='left', pad=22)
-        ax.legend(loc='best', fontsize=12, frameon=True, facecolor='white', framealpha=0.95)
-        fig.subplots_adjust(left=0.12, right=0.96, top=0.80, bottom=0.24)
-        fig.text(0.12, 0.08,
-                 f'Тест: {splits[0]["test_messages"]:,} SMS · Шкала Y: от {lower:.0f}% · Один запуск на точку'.replace(',', ' '),
-                 fontsize=11, color='#475569')
-        fig.text(0.12, 0.035,
-                 'Старые результаты MLP: совпадение данных не подтверждено контрольной суммой.'
-                 if legacy else 'Контрольные суммы данных и параметры разделения совпадают.',
-                 fontsize=9, color='#64748b')
-        path = folder / f'compare_{field}.png'
-        fig.savefig(path, dpi=180, facecolor='white')
-        plt.close(fig)
-        print(f'CREATED: {path.resolve()}')
+            ax.plot(x, y, marker=marker, markersize=7, linewidth=2.4,
+                    label=MODEL_NAMES[classifier], color=color)
+        path = ROOT / 'results' / dataset / f'compare_{field}.png'
+        save(fig, ax, path, f'{NAMES[dataset]}\n{title}', ylabel, ticks, values, note)
+    print(f'{dataset}: {names}')
 
 
 if __name__ == '__main__':
-    # Chart-only entry point: no model imports, cleaning or training.
     for dataset in NAMES:
+        for classifier in MODEL_NAMES:
+            path = result_folder(dataset, classifier) / 'metrics.csv'
+            if path.exists():
+                with path.open(encoding='utf-8-sig', newline='') as f:
+                    plot_accuracy(list(csv.DictReader(f)), dataset, classifier)
         plot_model_comparison(dataset)
 

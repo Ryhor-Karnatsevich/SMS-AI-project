@@ -1,4 +1,4 @@
-"""Compare one neural network trained on ten amounts of SMS data."""
+"""Compare four classifiers within two independent SMS studies."""
 from pathlib import Path
 import csv
 import argparse
@@ -15,10 +15,26 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.svm import LinearSVC
 from sklearn.pipeline import Pipeline
 
 ROOT = Path(__file__).resolve().parent
 SEED = 42
+CLASSIFIERS = ['mlp', 'logistic', 'naive_bayes', 'svm']
+
+
+def make_estimator(classifier):
+    if classifier == 'mlp':
+        return MLPClassifier(hidden_layer_sizes=(32,), activation='relu', solver='adam',
+                             max_iter=100, random_state=SEED)
+    if classifier == 'logistic':
+        return LogisticRegression(C=1.0, solver='lbfgs', max_iter=1000, random_state=SEED)
+    if classifier == 'naive_bayes':
+        return MultinomialNB(alpha=1.0)
+    if classifier == 'svm':
+        return LinearSVC(C=1.0, dual=True, max_iter=5000, random_state=SEED)
+    raise ValueError(f'Unknown classifier: {classifier}')
 
 
 def load_data(dataset):
@@ -31,8 +47,8 @@ def load_data(dataset):
 def run_experiment(dataset, classifier='mlp'):
     texts, labels = load_data(dataset)
     output = ROOT / "results" / dataset
-    if classifier == 'logistic':
-        output = output / 'logistic'
+    if classifier != 'mlp':
+        output = output / classifier
     output.mkdir(parents=True, exist_ok=True)
     model_folder = ROOT / 'models' / dataset
     model_folder.mkdir(parents=True, exist_ok=True)
@@ -47,6 +63,14 @@ def run_experiment(dataset, classifier='mlp'):
     if classifier == 'logistic':
         config.pop('hidden')
         config.update(classifier='logistic', max_iter=1000, C=1.0, solver='lbfgs')
+    elif classifier in ('naive_bayes', 'svm'):
+        config.pop('hidden')
+        config.pop('max_iter')
+        config['classifier'] = classifier
+        if classifier == 'naive_bayes':
+            config['alpha'] = 1.0
+        else:
+            config.update(C=1.0, dual=True, max_iter=5000)
     data_bytes = (ROOT / 'data' / 'clean' / f'{dataset}.csv').read_bytes()
     signature = hashlib.sha256(data_bytes + json.dumps(config, sort_keys=True).encode()).hexdigest()
     x_train, x_test, y_train, y_test = train_test_split(
@@ -78,13 +102,9 @@ def run_experiment(dataset, classifier='mlp'):
         # Fit TF-IDF only on this training subset, never on test messages.
         model = Pipeline([
             ("tfidf", TfidfVectorizer(max_features=3000, sublinear_tf=True)),
-            ("network", MLPClassifier(
-                hidden_layer_sizes=(32,), activation="relu", solver="adam",
-                max_iter=100, random_state=SEED,
-            ) if classifier == 'mlp' else LogisticRegression(
-                C=1.0, solver='lbfgs', max_iter=1000, random_state=SEED)),
+            ("network", make_estimator(classifier)),
         ])
-        print(f"\nModel {fraction:.0%}: {len(subset_x)} training messages...", flush=True)
+        print(f"\n{dataset}/{classifier} {fraction:.0%}: {len(subset_x)} training messages...", flush=True)
         model_path = model_folder / f'{classifier}_{percent:03d}.joblib'
         if model_path.exists():
             # Load only locally generated, trusted joblib files.
@@ -108,8 +128,9 @@ def run_experiment(dataset, classifier='mlp'):
         tn, fp, fn, tp = confusion_matrix(y_test, predicted, labels=[0, 1]).ravel()
         row = {
             "training_percent": percent,
-            "iterations": int(numpy.asarray(model.named_steps["network"].n_iter_).max()),
-            "converged": converged,
+            "iterations": (int(numpy.asarray(model.named_steps['network'].n_iter_).max())
+                           if hasattr(model.named_steps['network'], 'n_iter_') else ''),
+            "converged": converged if classifier != 'naive_bayes' else '',
             "training_messages": len(subset_x),
             "accuracy": accuracy_score(y_test, predicted),
             "spam_precision": precision_score(y_test, predicted, zero_division=0),
@@ -140,12 +161,14 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", choices=["uci", "super_sms", "both"], default="both")
     parser.add_argument("--plot-only", action="store_true")
     parser.add_argument("--train", action="store_true", help="Explicitly train missing models; reuse saved ones")
-    parser.add_argument('--model', choices=['mlp', 'logistic', 'both'], default='mlp')
+    parser.add_argument('--model', choices=CLASSIFIERS + ['both', 'new', 'all'], default='all',
+                        help='both: MLP + logistic; new: Naive Bayes + SVM; all: four classifiers')
     args = parser.parse_args()
     if args.train and args.plot_only:
         parser.error('Choose either --train or --plot-only')
     datasets = ["uci", "super_sms"] if args.dataset == "both" else [args.dataset]
-    classifiers = ['mlp', 'logistic'] if args.model == 'both' else [args.model]
+    groups = {'both': ['mlp', 'logistic'], 'new': ['naive_bayes', 'svm'], 'all': CLASSIFIERS}
+    classifiers = groups.get(args.model, [args.model])
     if args.train:
         from prepare_data import main as prepare
         prepare()
@@ -153,8 +176,8 @@ if __name__ == "__main__":
         for classifier in classifiers:
             if not args.train:
                 folder = ROOT / 'results' / dataset
-                if classifier == 'logistic':
-                    folder = folder / 'logistic'
+                if classifier != 'mlp':
+                    folder = folder / classifier
                 path = folder / 'metrics.csv'
                 if not path.exists():
                     print(f'No saved results for {dataset}/{classifier}; skipped.')
