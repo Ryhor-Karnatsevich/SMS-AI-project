@@ -1,12 +1,13 @@
 """Generate Polish charts from saved results. No training or preprocessing."""
 import csv
 import json
+import math
 from pathlib import Path
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.ticker import PercentFormatter
+from matplotlib.ticker import PercentFormatter, MaxNLocator
 
 ROOT = Path(__file__).resolve().parent
 NAMES = {'uci': 'UCI SMS Spam Collection', 'super_sms': 'Super SMS'}
@@ -35,17 +36,25 @@ def style(ax):
 
 
 def save(fig, ax, path, title, ylabel, ticks, values, note, zoom=True):
-    lower = max(0, min(values) // 5 * 5 - 5) if zoom else 0
-    ax.set_ylim(lower, 102)
+    minimum = min(values)
+    padding = max(0.5, (100 - minimum) * 0.05)
+    lower = max(0, math.floor((minimum - padding) * 2) / 2) if zoom else 0
+    ax.set_ylim(lower, 100)
     ax.set_xlim(min(ticks) - 3, max(ticks) + 3)
     ax.set_xticks(ticks, [f'{p}%' for p in ticks])
     ax.set_xlabel('Wykorzystana część puli treningowej (%)', fontsize=13, labelpad=12)
     ax.set_ylabel(ylabel, fontsize=13, labelpad=12)
-    ax.yaxis.set_major_formatter(PercentFormatter(100, decimals=0))
+    positions = MaxNLocator(nbins=6).tick_values(lower, 100)
+    positions = [v for v in positions if lower <= v < 100]
+    # Avoid a nearly overlapping last tick just below the fixed 100% endpoint.
+    if positions and 100 - positions[-1] < (100 - lower) * 0.07:
+        positions.pop()
+    ax.set_yticks(positions + [100])
+    ax.yaxis.set_major_formatter(PercentFormatter(100, decimals=1))
     ax.set_title(title, fontsize=19, loc='left', pad=22)
     ax.legend(loc='best', fontsize=11, frameon=True, facecolor='white', framealpha=0.95)
     fig.subplots_adjust(left=0.12, right=0.96, top=0.80, bottom=0.25)
-    fig.text(0.12, 0.12, f'Oś Y od {lower:.0f}%. Jeden trening na punkt; brak oceny zmienności.',
+    fig.text(0.12, 0.12, f'Oś Y: {lower:g}–100%. Jeden trening na punkt; brak oceny zmienności.',
              fontsize=10, color='#475569')
     fig.text(0.12, 0.04, note, fontsize=9, color='#64748b')
     fig.savefig(path, dpi=180, facecolor='white')
