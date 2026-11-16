@@ -1,0 +1,36 @@
+{
+  "uci": [
+    {
+      "message_id": "702a14cdffce9fb18af6e4c5de40cd4a773b4101d3851730c06cf151e9e802b4",
+      "title": "Zwykła rozmowa z wyrazami podobnymi do reklamy",
+      "comment": "Wiadomość pyta o możliwość rozmowy. Słowa free i call występują również w reklamach, lecz tutaj mają zwykłe znaczenie. To hipoteza o trudności reprezentacji słownej, a nie potwierdzone wyjaśnienie decyzji modelu."
+    },
+    {
+      "message_id": "a887caec7a1cded9075cfd41761feb07f76fe6c08ddc2958c3b74aec9cba8e86",
+      "title": "Oferta nagrody rozpoznana jako zwykła wiadomość",
+      "comment": "Obietnica aparatu i polecenie telefonu tworzą strukturę oferty, mimo że nie musi występować dosłowne słowo spam. Ten przykład pokazuje, dlaczego warto oceniać przeoczenia, a nie wyłącznie poprawność alarmów."
+    },
+    {
+      "message_id": "85fc8826eb84afbb279c5770ea49c6df8b785d337b7f7889eb37f0187bb1e668",
+      "title": "Płatna usługa udająca osobistą rozmowę",
+      "comment": "Początek przypomina prywatny kontakt i zawiera skróty, np. 2morro i 2nite. Dalej pojawia się numer oraz opłata za minutę. Mieszanie stylu rozmowy i płatnej oferty jest istotnym przypadkiem do ręcznego omówienia."
+    }
+  ],
+  "super_sms": [
+    {
+      "message_id": "a5bc648be4fa4b96041689b9b470096ce43f9e2e20a3d2b65755d8c52a8f48ce",
+      "title": "Powiadomienie o dostawie a podejrzana oferta",
+      "comment": "Według zbioru jest to ham. Tekst zawiera markę, dostawę i numer telefonu, czyli elementy spotykane również w oszustwach. Samo występowanie tych elementów nie wystarcza do uznania wiadomości za spam."
+    },
+    {
+      "message_id": "a49fd99d9054d2a1800ef39cdea6518a160db6f5d3579dc704fcee6219a5ee34",
+      "title": "Rozmowny tekst z etykietą spam",
+      "comment": "Treść przypomina prywatną rozmowę o publikacji i postępach; nie zawiera oczywistej oferty. Etykieta spam może wymagać kontroli w kontekście źródła. Nie zmieniamy jej na podstawie samego tekstu ani zgodności modeli."
+    },
+    {
+      "message_id": "e8c223ef0695c5c97a68daf182f17c28833ff4f70350ec754f10de4a3e9a42dd",
+      "title": "Możliwa niejednoznaczność etykiety",
+      "comment": "Tekst opisuje samopoczucie i leki, a w zbiorze ma etykietę spam. To przykład do weryfikacji jakości danych, nie dowód, że model ma rację. Zachowujemy oryginalną etykietę przy obliczaniu miar."
+    }
+  ]
+}

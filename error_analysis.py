@@ -4,7 +4,6 @@ import csv
 import hashlib
 import json
 import re
-from collections import Counter
 from pathlib import Path
 
 import joblib
@@ -13,7 +12,8 @@ import sklearn
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 
-from plots import MODEL_NAMES, NAMES, COLORS, style, plt, PercentFormatter
+from plots import MODEL_NAMES, NAMES
+from error_report import build_report
 
 ROOT = Path(__file__).resolve().parent
 URL = re.compile(r'https?://|www\.', re.I)
@@ -59,106 +59,6 @@ def verify_saved_metrics(dataset, classifier, percent, counts):
     if not all(k in checked for k in ('accuracy', 'spam_precision', 'spam_recall', 'spam_f1')):
         raise ValueError(f'{path}: insufficient metrics to verify cross-version predictions')
     return checked
-
-
-def chart_note(fig, test_size, models, percent):
-    missing = [name for key, name in MODEL_NAMES.items() if key not in models]
-    note = f'Test: {test_size} SMS | Trening: {percent}% puli | Modele: {len(models)}/4'
-    if missing:
-        note += '\nBrak zapisanych modeli: ' + ', '.join(missing)
-    fig.text(0.12, 0.035, note, fontsize=10, color='#475569')
-
-
-def finish(fig, path):
-    fig.subplots_adjust(left=0.12, right=0.96, top=0.84, bottom=0.24)
-    fig.savefig(path, dpi=180, facecolor='white')
-    plt.close(fig)
-    print(f'CREATED: {path.resolve()}')
-
-
-def plot_analysis(folder, dataset, percent, labels, predictions, summaries, segments):
-    models = list(predictions)
-    names = [MODEL_NAMES[m] for m in models]
-    x = np.arange(len(models))
-    test_size = len(labels)
-    for filename, title, left_key, right_key, ylabel in [
-        ('error_counts.png', 'Dwa rodzaje pomyłek', 'false_positive', 'false_negative', 'Liczba testowych SMS'),
-        ('error_rates.png', 'Jak często model myli każdą klasę?', 'false_positive_rate', 'false_negative_rate', 'Odsetek błędów w danej klasie (%)'),
-    ]:
-        fig, ax = plt.subplots(figsize=(11, 6.5))
-        style(ax)
-        is_rate = filename == 'error_rates.png'
-        factor = 100 if is_rate else 1
-        for offset, key, legend, color in [
-            (-0.18, left_key, 'Fałszywy alarm (ham -> spam)', COLORS[2]),
-            (0.18, right_key, 'Przeoczony spam (spam -> ham)', COLORS[0]),
-        ]:
-            values = [row[key] * factor for row in summaries]
-            bars = ax.bar(x + offset, values, width=0.36, label=legend, color=color)
-            ax.bar_label(bars, labels=[f'{v:.1f}%' if is_rate else str(int(v)) for v in values],
-                         padding=5, fontsize=11)
-        maximum = max(row[key] * factor for row in summaries for key in (left_key, right_key))
-        ax.set_ylim(0, min(100, max(1, maximum * 1.25)) if is_rate else max(1, maximum * 1.25))
-        ax.set_xticks(x, names, fontsize=11)
-        ax.set_ylabel(ylabel, fontsize=12)
-        ax.set_title(f'{NAMES[dataset]}\n{title}', fontsize=19, loc='left', pad=20)
-        ax.legend(loc='upper left', bbox_to_anchor=(0, -0.10), fontsize=10, ncol=2)
-        if is_rate:
-            ax.yaxis.set_major_formatter(PercentFormatter(100))
-            fig.text(0.12, 0.12, 'Alarmy / wszystkie ham; przeoczenia / wszystkie spam. Różne mianowniki.', fontsize=10)
-        chart_note(fig, test_size, models, percent)
-        finish(fig, folder / filename)
-
-    errors = {m: np.asarray(predictions[m]) != labels for m in models}
-    matrix = np.zeros((len(models), len(models)))
-    overlap_rows = []
-    for i, first in enumerate(models):
-        for j, second in enumerate(models):
-            intersection = int(np.sum(errors[first] & errors[second]))
-            union = int(np.sum(errors[first] | errors[second]))
-            value = rate(intersection, union)
-            matrix[i, j] = np.nan if value is None else value * 100
-            overlap_rows.append({'model_a': first, 'model_b': second,
-                                 'shared_errors': intersection, 'union_errors': union,
-                                 'jaccard': '' if value is None else value})
-    write_csv(folder / 'overlap.csv', overlap_rows, list(overlap_rows[0]))
-    fig, ax = plt.subplots(figsize=(10, 7))
-    im = ax.imshow(np.ma.masked_invalid(matrix), vmin=0, vmax=100, cmap='Blues')
-    ax.set_xticks(range(len(models)), names, rotation=15, ha='right', fontsize=11)
-    ax.set_yticks(range(len(models)), names, fontsize=11)
-    for i in range(len(models)):
-        for j in range(len(models)):
-            value = matrix[i, j]
-            ax.text(j, i, 'n/a' if np.isnan(value) else f'{value:.0f}%', ha='center', va='center',
-                    fontsize=16, color='white' if value > 55 else '#0f172a')
-    fig.colorbar(im, ax=ax, format=PercentFormatter(100), label='Jaccard (%)')
-    ax.set_title(f'{NAMES[dataset]}\nCzy modele mylą te same SMS?', fontsize=19, loc='left', pad=20)
-    fig.text(0.12, 0.12, 'Jaccard = wspólne błędy / SMS błędne dla co najmniej jednego z dwóch modeli.', fontsize=9)
-    chart_note(fig, test_size, models, percent)
-    finish(fig, folder / 'shared_errors.png')
-
-    buckets = ['short', 'medium', 'long']
-    fig, ax = plt.subplots(figsize=(11, 6.5))
-    style(ax)
-    width = 0.75 / len(models)
-    for i, model in enumerate(models):
-        data = [next(r for r in segments if r['model'] == model and r['segment'] == b) for b in buckets]
-        values = [np.nan if r['error_rate'] is None else r['error_rate'] * 100 for r in data]
-        positions = np.arange(3) + (i - (len(models) - 1) / 2) * width
-        bars = ax.bar(positions, values, width=width, label=MODEL_NAMES[model],
-                      color=COLORS[list(MODEL_NAMES).index(model)])
-        ax.bar_label(bars, labels=[f'{v:.1f}%' if np.isfinite(v) else 'n/a' for v in values], padding=3, fontsize=9)
-    support = [next(r['messages'] for r in segments if r['segment'] == b) for b in buckets]
-    ax.set_xticks(range(3), [f'{label}\nn={n}' for label, n in zip(
-        ['Krótkie: do 40 znaków', 'Średnie: 41–160 znaków', 'Długie: ponad 160 znaków'], support)], fontsize=11)
-    values = [r['error_rate'] * 100 for r in segments if r['segment'] in buckets and r['error_rate'] is not None]
-    ax.set_ylim(0, min(100, max(1, max(values, default=0) * 1.3)))
-    ax.yaxis.set_major_formatter(PercentFormatter(100))
-    ax.set_ylabel('Błędne odpowiedzi w danej grupie (%)', fontsize=12)
-    ax.set_title(f'{NAMES[dataset]}\nBłędy a długość wiadomości', fontsize=19, loc='left', pad=20)
-    ax.legend(fontsize=10)
-    chart_note(fig, test_size, models, percent)
-    finish(fig, folder / 'segment_errors.png')
 
 
 def analyze(dataset, percent):
@@ -267,45 +167,16 @@ def analyze(dataset, percent):
                 'compatibility': compatibility,
                 'fit_performed': False, 'segments': 'length <=40, 41-160, >160; URL regex https?:// or www.'}
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-    plot_analysis(output, dataset, percent, y_test, predictions, summaries, segments)
-    lines = [f'# Analiza błędów: {NAMES[dataset]}', '',
-             f'Trening: {percent}% puli. Test: {len(y_test)} SMS. Dostępne modele: {len(predictions)}/4.', '',
-             '| Model | Fałszywe alarmy | Przeoczony spam |', '|---|---:|---:|']
-    lines += [f'| {MODEL_NAMES[r["model"]]} | {r["false_positive"]} | {r["false_negative"]} |' for r in summaries]
-    if missing:
-        lines += ['', 'Brak zapisanych modeli: ' + ', '.join(MODEL_NAMES[m] for m in missing) + '.']
-    if any(v['version_mismatch'] for v in compatibility.values()):
-        lines += ['', 'Wersje bibliotek różnią się od zapisanych. Dla tych modeli sprawdzono zgodność '
-                  'predykcji z wcześniejszymi miarami zbiorczymi; szczegóły zawiera manifest.json. '
-                  'Zgodność miar nie dowodzi identyczności każdej pojedynczej predykcji ani pełnej '
-                  'zgodności prawdopodobieństw między wersjami.']
-    lines += ['', '## Przykłady do ręcznej oceny', '',
-              'Przykłady poniżej są pierwszymi błędami w stałej kolejności testu, nie rankingiem ważności.']
-    for classifier in predictions:
-        for error_type, title in [('false_positive', 'Fałszywe alarmy'), ('false_negative', 'Przeoczony spam')]:
-            examples = [r for r in wrong if r['model'] == classifier and r['error_type'] == error_type][:5]
-            lines += ['', f'### {MODEL_NAMES[classifier]} — {title}', '']
-            for r in examples:
-                escaped = r['text'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                lines += ['<pre>' + escaped + '</pre>', '']
-            if not examples:
-                lines.append('Brak takich błędów w tym teście.')
-    lines += ['', '## Interpretacja', '',
-              'Długość i obecność URL to segmenty opisowe, nie ustalone przyczyny błędów. '
-              'Proporcje klas i mała liczebność segmentów mogą zmieniać wskaźniki. '
-              'Jaccard opisuje wspólne błędy; n/a oznacza brak błędów w obu modelach. '
-              'Margines SVM nie jest prawdopodobieństwem i nie jest porównywalny ze skalą innych modeli. '
-              'To analiza testu po ocenie. Nie dobieramy na jej podstawie parametrów na tym samym teście; '
-              'do rozwoju potrzebna będzie walidacja lub nowy test.']
-    (output / 'report.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
-    print(f'REPORT: {output / "report.md"}')
+    return output
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Analyze saved models; no training is performed.')
     parser.add_argument('--dataset', choices=['uci', 'super_sms', 'both'], default='both')
-    parser.add_argument('--training-percent', type=int, choices=list(range(10, 101, 10)), default=100)
+    parser.add_argument('--training-percent', type=int, nargs='+', choices=list(range(10, 101, 10)), default=[10, 100])
     args = parser.parse_args()
     for dataset in (NAMES if args.dataset == 'both' else [args.dataset]):
-        analyze(dataset, args.training_percent)
+        outputs = {percent: analyze(dataset, percent) for percent in sorted(set(args.training_percent))}
+        build_report(dataset, {p: path for p, path in outputs.items() if path is not None})
+
 

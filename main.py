@@ -124,6 +124,9 @@ def run_experiment(dataset, classifier='mlp'):
             joblib.dump({'model': model, 'signature': signature, 'config': config,
                          'converged': converged}, temporary)
             temporary.replace(model_path)
+        if not converged:
+            print(f'NOTE: {dataset}/{classifier} at {percent}% reached its iteration limit. '
+                  'The result is retained and marked as not converged; settings are unchanged.')
         predicted = model.predict(x_test)
         tn, fp, fn, tp = confusion_matrix(y_test, predicted, labels=[0, 1]).ravel()
         row = {
