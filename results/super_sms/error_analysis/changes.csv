@@ -1,0 +1,5 @@
+﻿model,errors_10,errors_100,corrected,introduced,persistent
+mlp,135,110,92,67,43
+logistic,155,83,83,11,72
+naive_bayes,173,160,37,24,136
+svm,128,72,71,15,57

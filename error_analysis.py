@@ -13,7 +13,7 @@ from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 
 from plots import MODEL_NAMES, NAMES
-from error_report import build_report
+from error_report import build_report, refresh_readme
 
 ROOT = Path(__file__).resolve().parent
 URL = re.compile(r'https?://|www\.', re.I)
@@ -178,5 +178,6 @@ if __name__ == '__main__':
     for dataset in (NAMES if args.dataset == 'both' else [args.dataset]):
         outputs = {percent: analyze(dataset, percent) for percent in sorted(set(args.training_percent))}
         build_report(dataset, {p: path for p, path in outputs.items() if path is not None})
+    refresh_readme()
 
 

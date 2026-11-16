@@ -17,6 +17,57 @@ def read_csv(path):
         return list(csv.DictReader(file))
 
 
+def refresh_readme():
+    """Publish only existing analysis artifacts inside a bounded README section."""
+    path = ROOT / 'README.md'
+    content = path.read_text(encoding='utf-8-sig')
+    start, end = '<!-- ERROR_ANALYSIS:START -->', '<!-- ERROR_ANALYSIS:END -->'
+    if start not in content or end not in content:
+        print('README: managed analysis section missing; no text was changed.')
+        return
+    lines = ['## Analiza błędów', '',
+             '**FP** to zwykły SMS uznany za spam, a **FN** — przeoczony spam. '
+             'Porównanie 10% i 100% treningu dotyczy tego samego testu wewnątrz każdego badania.', '']
+    for dataset, title in NAMES.items():
+        folder = ROOT / 'results' / dataset / 'error_analysis'
+        relative = folder.relative_to(ROOT).as_posix()
+        required = ['status.json', 'report.md', 'error_comparison.png', 'error_changes.png']
+        lines += [f'### {title}', '']
+        if all((folder / name).exists() for name in required):
+            status = json.loads((folder / 'status.json').read_text(encoding='utf-8'))
+            count = len(status['compared_models'])
+            lines += [f'Porównanie obejmuje **{count}/4 modeli** przy 10% i 100% treningu.', '',
+                      f'![Rodzaje błędów — {title}]({relative}/error_comparison.png)', '',
+                      f'![Poprawione i nowe błędy — {title}]({relative}/error_changes.png)', '',
+                      f'[Wnioski i omówione przykłady SMS]({relative}/report.md)', '']
+        else:
+            lines += ['Liczby błędów z zapisanych wyników eksperymentu:', '',
+                      '| Model | FP: 10% → 100% | FN: 10% → 100% |', '|---|---:|---:|---:|']
+            for classifier, name in MODEL_NAMES.items():
+                base = ROOT / 'results' / dataset
+                metrics = (base if classifier == 'mlp' else base / classifier) / 'metrics.csv'
+                if not metrics.exists():
+                    continue
+                rows = {int(r['training_percent']): r for r in read_csv(metrics)}
+                def pair(field):
+                    return ' → '.join(rows.get(p, {}).get(field, '') or 'n/a' for p in (10, 100))
+                lines.append(f'| {name} | {pair("false_positive")} | {pair("false_negative")} |')
+            old_report = folder / '100' / 'report.md'
+            if old_report.exists():
+                lines += ['', f'[Dostępny przegląd błędnych SMS przy 100% treningu]({relative}/100/report.md). '
+                          'Ten wcześniejszy raport obejmuje trzy modele, bez MLP.']
+            lines += ['', 'Nie wygenerowano jeszcze porównania pojedynczych błędów między 10% i 100%. '
+                      'Same sumy nie wskazują, które wiadomości zostały poprawione.']
+        lines.append('')
+    lines += ['Komentarze do treści są hipotezami, nie dowodem przyczyny decyzji. '
+              'Nie zmieniamy etykiet ani parametrów na podstawie tego testu.']
+    before, remainder = content.split(start, 1)
+    _, after = remainder.split(end, 1)
+    path.write_text(before + start + '\n\n' + '\n'.join(lines) + '\n\n' + end + after,
+                    encoding='utf-8')
+    print('README: refreshed links to existing analysis results.')
+
+
 def save_chart(fig, path, note):
     # Keep legend, plot labels and footer in separate vertical regions.
     fig.subplots_adjust(left=0.25, right=0.95, top=0.78, bottom=0.15)

@@ -1,0 +1,5 @@
+﻿model,test_messages,true_negative,false_positive,false_negative,true_positive,false_positive_rate,false_negative_rate
+mlp,516,452,0,17,47,0.0,0.265625
+logistic,516,452,0,62,2,0.0,0.96875
+naive_bayes,516,452,0,60,4,0.0,0.9375
+svm,516,452,0,15,49,0.0,0.234375

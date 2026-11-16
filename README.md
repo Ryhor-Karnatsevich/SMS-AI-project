@@ -1,100 +1,112 @@
 # Wpływ wielkości zbioru treningowego i wyboru modelu na klasyfikację SMS
 
-## Cel i dane
+## Cel badania
 
-Badamy dwa równorzędne pytania: **jak ilość danych wpływa na jakość klasyfikacji** oraz **jak wybór algorytmu wpływa na wynik przy tej samej ilości danych**. Prowadzimy osobne eksperymenty na UCI i Super SMS; nie porównujemy tych zbiorów ze sobą.
+Sprawdzamy dwa równorzędne zagadnienia: **wpływ ilości danych treningowych** oraz **wpływ wyboru algorytmu** na wykrywanie spamu. Eksperymenty wykonujemy oddzielnie dla UCI i Super SMS. Nie porównujemy zbiorów między sobą.
 
-| Zbiór | Przed czyszczeniem | Po czyszczeniu | Ham | Spam |
+## Dane i metoda
+
+| Zbiór | Wiadomości po czyszczeniu | Ham | Spam | Test |
 |---|---:|---:|---:|---:|
-| UCI SMS Spam Collection | 5 574 | 5 156 | 4 514 | 642 |
-| Super SMS | 67 010 | 60 858 | 36 309 | 24 549 |
+| UCI SMS Spam Collection | 5 156 | 4 514 | 642 | 516 |
+| Super SMS | 60 858 | 36 309 | 24 549 | 6 086 |
 
-**Ham** oznacza zwykłą wiadomość, **spam** — niechcianą. Normalizujemy tekst, usuwamy niepoprawne rekordy, duplikaty i grupy ze sprzecznymi etykietami. W Super SMS dodatkowo odrzucamy krótkie lub uszkodzone wpisy, powtarzające się szablony i pokrycia z oryginalnym UCI. Oryginały pozostają bez zmian.
+**Ham** to zwykła wiadomość, **spam** — niechciana. Usuwamy niepoprawne rekordy, duplikaty i sprzeczne etykiety. W Super SMS wykluczamy także krótkie lub uszkodzone wpisy, powtarzające się szablony oraz pokrycia z oryginalnym UCI. Oryginały zachowujemy bez zmian.
 
-## Metoda
+Porównujemy cztery modele korzystające z **TF-IDF, do 3 000 cech**:
 
-Porównujemy **MLP** (32 neurony, ReLU), **regresję logistyczną** (L2, C=1), **Multinomial Naive Bayes** (alpha=1) i **Linear SVM** (C=1). Wszystkie korzystają z TF-IDF, do 3 000 cech.
+- **MLP:** warstwa ukryta z 32 neuronami, ReLU, Adam.
+- **Regresja logistyczna:** regularyzacja L2, C=1.
+- **Multinomial Naive Bayes:** alpha=1.
+- **Linear SVM:** C=1.
 
-Dla każdego zbioru odkładamy **10% na test**. Każdy model uczymy na **10%, 20%, …, 100% pozostałej puli**. Mniejsze próbki zawierają się w większych. Algorytmy otrzymują te same podwybory i test, a TF-IDF dopasowujemy wyłącznie do aktualnej próbki treningowej (`random_state=42`). Nie dobieramy parametrów na teście. Osiągnięcie limitu iteracji jest zaznaczone w wynikach.
+W każdym badaniu 10% danych odkładamy na test. Modele uczymy na **10%, 20%, …, 100% pozostałej puli**. Dostają te same próbki i test; mniejsze próbki zawierają się w większych. TF-IDF dopasowujemy wyłącznie do aktualnego treningu (`random_state=42`).
 
-Oceniamy **accuracy** (poprawne odpowiedzi), **precision** (poprawność alarmów), **recall** (wykryta część spamu) i **F1** (średnia harmoniczna precision i recall).
+**Accuracy** mierzy wszystkie poprawne odpowiedzi, **precision** — poprawność alarmów, **recall** — wykrytą część spamu, a **F1** łączy precision i recall. Ze względu na nierówne proporcje klas nie ograniczamy oceny do accuracy.
 
-## Wyniki eksperymentów
+## Badanie 1 · UCI
 
-Oś X oznacza wielkość treningu, a linie — modele. Skala Y kończy się na 100%; jej dolna granica jest podana na wykresie. Pełne tabele i dodatkowe miary znajdują się w folderach wyników.
+| Model | F1 przy 10% treningu | F1 przy 100% treningu | Accuracy przy 100% |
+|---|---:|---:|---:|
+| MLP | 84,68% | 94,40% | 98,64% |
+| Regresja logistyczna | 6,06% | 84,96% | 96,71% |
+| Naive Bayes | 11,76% | 86,73% | 97,09% |
+| Linear SVM | 86,73% | 95,16% | 98,84% |
 
-### Badanie 1 · UCI
+![Accuracy modeli na UCI](results/uci/compare_accuracy.png)
 
-![Accuracy na UCI](results/uci/compare_accuracy.png)
+![F1 modeli na UCI](results/uci/compare_spam_f1.png)
 
-![F1 na UCI](results/uci/compare_spam_f1.png)
+**Obserwacje:** wszystkie modele osiągnęły wyższe F1 przy pełnej próbce niż przy 10%. Regresja logistyczna i Naive Bayes przy małej próbce pomijały większość spamu. Najwyższe końcowe F1 uzyskał SVM, lecz jego przewaga nad MLP w accuracy odpowiada tylko **jednej wiadomości testowej** — nie jest to dowód istotnej przewagi.
 
-### Badanie 2 · Super SMS
+## Badanie 2 · Super SMS
 
-![Accuracy na Super SMS](results/super_sms/compare_accuracy.png)
+| Model | F1 przy 10% treningu | F1 przy 100% treningu | Accuracy przy 100% |
+|---|---:|---:|---:|
+| MLP | 97,24% | 97,76% | 98,19% |
+| Regresja logistyczna | 96,81% | 98,30% | 98,64% |
+| Naive Bayes | 96,49% | 96,77% | 97,37% |
+| Linear SVM | 97,38% | 98,53% | 98,82% |
 
-![F1 na Super SMS](results/super_sms/compare_spam_f1.png)
+![Accuracy modeli na Super SMS](results/super_sms/compare_accuracy.png)
 
-## Analiza błędów · 10% a 100% treningu
+![F1 modeli na Super SMS](results/super_sms/compare_spam_f1.png)
 
-Sprawdzamy, **jak zmieniają się pomyłki na tych samych testowych SMS**, gdy rośnie zbiór treningowy:
+**Obserwacje:** przy 10% puli wszystkie modele miały już wysokie F1, a dalszy wzrost był ograniczony. Przy pełnym treningu SVM i regresja logistyczna uzyskały wyższe F1 niż MLP. Większa złożoność modelu nie zapewniła lepszego wyniku. Zmiany na pośrednich rozmiarach nie muszą być monotoniczne.
 
-- **FP:** zwykły SMS błędnie uznany za spam.
-- **FN:** spam błędnie uznany za zwykły SMS.
-- **Poprawiony błąd:** błędna odpowiedź przy 10%, poprawna przy 100%.
-- **Nowy błąd:** poprawna odpowiedź przy 10%, błędna przy 100%.
+Na wykresach oś X oznacza udział puli treningowej, a linie — algorytmy. Skala Y kończy się na 100%; dolna granica jest podana na wykresie. Pełne tabele i pozostałe miary znajdują się w `results/`.
 
-### UCI
+<!-- ERROR_ANALYSIS:START -->
 
-![Rodzaje błędów przy 10% i 100% treningu na UCI](results/uci/error_analysis/error_comparison.png)
+## Analiza błędów
 
-![Poprawione i nowe błędy na UCI](results/uci/error_analysis/error_changes.png)
+**FP** to zwykły SMS uznany za spam, a **FN** — przeoczony spam. Porównanie 10% i 100% treningu dotyczy tego samego testu wewnątrz każdego badania.
 
-[Krótki raport: liczby, wnioski i omówione przykłady](results/uci/error_analysis/report.md)
+### UCI SMS Spam Collection
+
+Porównanie obejmuje **4/4 modeli** przy 10% i 100% treningu.
+
+![Rodzaje błędów — UCI SMS Spam Collection](results/uci/error_analysis/error_comparison.png)
+
+![Poprawione i nowe błędy — UCI SMS Spam Collection](results/uci/error_analysis/error_changes.png)
+
+[Wnioski i omówione przykłady SMS](results/uci/error_analysis/report.md)
+
 
 ### Super SMS
 
-![Rodzaje błędów przy 10% i 100% treningu na Super SMS](results/super_sms/error_analysis/error_comparison.png)
+Porównanie obejmuje **4/4 modeli** przy 10% i 100% treningu.
 
-![Poprawione i nowe błędy na Super SMS](results/super_sms/error_analysis/error_changes.png)
+![Rodzaje błędów — Super SMS](results/super_sms/error_analysis/error_comparison.png)
 
-[Krótki raport: liczby, wnioski i omówione przykłady](results/super_sms/error_analysis/report.md)
+![Poprawione i nowe błędy — Super SMS](results/super_sms/error_analysis/error_changes.png)
 
-Raport automatycznie podaje zmianę liczby błędów każdego modelu oraz omawia wybrane wiadomości: reklamowe znaczenie zwykłych słów, płatne oferty udające rozmowę, powiadomienia o dostawie i niejednoznaczne etykiety. Są to interpretacje treści, nie udowodnione przyczyny decyzji. Nie zmieniamy etykiet na podstawie opinii modelu. Szczegółowe predykcje i listy błędnych SMS pozostają w podfolderach `10/` i `100/`.
+[Wnioski i omówione przykłady SMS](results/super_sms/error_analysis/report.md)
 
-**Kompletność jest sprawdzana:** brak zapisanego modelu daje oznaczenie niepełnego porównania, a nie fikcyjny wynik. Wykresy i raporty tego etapu powstają po uruchomieniu analizy.
+
+Komentarze do treści są hipotezami, nie dowodem przyczyny decyzji. Nie zmieniamy etykiet ani parametrów na podstawie tego testu.
+
+<!-- ERROR_ANALYSIS:END -->
 
 ## Ograniczenia
 
-Jeden podział danych nie pozwala wykazać istotnej przewagi algorytmu. Wysoka accuracy może ukrywać przeoczony spam, dlatego analizujemy także recall i F1. Czyszczenie szablonów jest heurystyką; nie przeprowadzono pełnej kontroli etykiet, języka i kodowania. Podejrzane etykiety pozostają zgodne ze źródłem.
+Jeden podział danych nie wystarcza do potwierdzenia istotnej przewagi modelu. Osiągnięcie limitu iteracji MLP jest zaznaczone w tabelach wynikowych. Czyszczenie szablonów jest heurystyką; nie wykonano pełnej kontroli etykiet, języka i kodowania. Interpretacje treści błędnych SMS są hipotezami, a podejrzanych etykiet nie zmieniamy samodzielnie.
 
-Analiza błędów opisuje test po ocenie. Nie dostrajamy modeli na tym samym teście; kolejne ulepszenia wymagają osobnej walidacji. Przy zmianie wersji bibliotek sprawdzamy zgodność z wcześniejszymi miarami, lecz nie stanowi to dowodu identyczności każdej predykcji. Szczegóły zawierają manifesty. Starsze tabele MLP bez podpisu danych są oznaczane na wykresach.
+Analiza błędów opisuje test po ocenie. Nie dostrajamy modeli na tym samym teście; dalsze ulepszenia wymagają osobnej walidacji. Zgodność miar po zmianie bibliotek nie dowodzi identyczności każdej predykcji; szczegóły zapisano w manifestach.
 
-## Uruchomienie
+## Odtworzenie wykresów i analizy
 
-Instalacja: `python -m pip install -r requirements.txt`.
-
-Brakujące zapisane MLP trzeba uzyskać **jednorazowo**, jawnie uruchamiając uczenie tej sieci. Pozostałe modele nie są wtedy uczone:
-
-```powershell
-python main.py --train --model mlp
-```
-
-Następnie analiza obu zbiorów przy 10% i 100%, bez uczenia:
+Modele są już zapisane. Poniższe polecenia **nie uruchamiają uczenia**:
 
 ```powershell
 python error_analysis.py
-```
-
-Odświeżenie głównych wykresów z tabel, również bez uczenia:
-
-```powershell
 python plots.py
 ```
 
-README ma już docelowe ścieżki obrazów i raportów. Do wyświetlenia na GitHubie trzeba przesłać również wygenerowane pliki z `results/`.
+Analiza automatycznie aktualizuje swój rozdział README, dodając wyłącznie istniejące wykresy i raporty. Biblioteki: `python -m pip install -r requirements.txt`. Aby obrazy były widoczne na GitHubie, należy przesłać także pliki z `results/`.
 
 ## Źródła
 
 - [UCI SMS Spam Collection](https://archive.ics.uci.edu/dataset/228/sms+spam+collection).
 - [Super SMS — dane i kod autorów](https://github.com/smspamresearch/spstudy): Salman, Ikram, Kaafar (2024), *Investigating Evasive Techniques in SMS Spam Filtering: A Comparative Analysis of Machine Learning Models*, IEEE Access.
+

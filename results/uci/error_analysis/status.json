@@ -1,0 +1,15 @@
+{
+  "complete": true,
+  "compared_models": [
+    "mlp",
+    "logistic",
+    "naive_bayes",
+    "svm"
+  ],
+  "missing_models": [],
+  "training_percentages": [
+    10,
+    100
+  ],
+  "fit_performed": false
+}
